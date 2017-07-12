@@ -1,12 +1,14 @@
 require "pg"
+require "io/console"
 
 class ExpenseData
   def initialize
     @connection = PG.connect(dbname: "expenses")
   end
-  
+
   def list_expenses
     result = @connection.exec("SELECT * FROM expenses ORDER BY created_on ASC;")
+    display_count(result)
     display_expenses(result)
   end
 
@@ -19,6 +21,7 @@ class ExpenseData
   def search_expense(query)
     sql = "SELECT * FROM expenses WHERE memo ILIKE $1"
     result = @connection.exec_params(sql, ["%#{query}%"])
+    display_count(result)
     display_expenses(result)
   end
   
@@ -36,12 +39,34 @@ class ExpenseData
     end
   end
   
+  def delete_all_expenses
+      sql = "DELETE FROM expenses;"
+      @connection.exec(sql)
+      puts "All expenses have been deleted."
+  end
+  
   private
   
-  def display_expenses(result)
-    result.each_row do |row| 
+  def display_count(expenses)
+    count = expenses.ntuples
+    
+    if count == 0 
+      puts "There are no expenses."
+    else
+      puts "There are #{count} expense#{"s" if count != 1}."
+    end
+  end
+  
+  def display_expenses(expenses)
+    expenses.each_row do |row| 
       puts "#{row[0].rjust(3)} | #{row[3].rjust(10)} | #{row[1].rjust(12)} | #{row[2]}" 
     end
+    
+    puts "-" * 50
+
+    amount_sum = expenses.field_values("amount").map(&:to_f).inject(:+)
+
+    puts "Total #{amount_sum.to_s.rjust(25)}"
   end
 end
 
@@ -82,6 +107,10 @@ class CLI
     when "delete"
       expense_id = arguments[0]
       @application.delete_expense(expense_id)
+    when "clear"
+      puts "This will remove all expenses. Are you sure? (y/n)"
+      answer = $stdin.getch
+      @application.delete_all_expenses if answer == "y"
     else
       display_help
     end  
