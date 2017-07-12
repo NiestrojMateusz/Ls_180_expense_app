@@ -4,6 +4,7 @@ require "io/console"
 class ExpenseData
   def initialize
     @connection = PG.connect(dbname: "expenses")
+    setup_schema
   end
 
   def list_expenses
@@ -67,6 +68,24 @@ class ExpenseData
     amount_sum = expenses.field_values("amount").map(&:to_f).inject(:+)
 
     puts "Total #{amount_sum.to_s.rjust(25)}"
+  end
+  
+  def setup_schema
+    result = @connection.exec <<~SQL
+      SELECT COUNT(*) FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = 'expenses';
+    SQL
+    
+    if result[0]["count"] == "0"
+      @connection.exec <<~SQL
+        CREATE TABLE expenses (
+          id serial PRIMARY KEY,
+          amount numeric(6,2) NOT NULL CHECK (amount >= 0.01),
+          memo text NOT NULL,
+          created_on date NOT NULL
+        );
+      SQL
+    end
   end
 end
 
